@@ -1,3 +1,5 @@
+<img width="1919" height="909" alt="image" src="https://github.com/user-attachments/assets/5ab0c5f4-9be4-42f8-831e-acbdfd87ec39" />
+
 # 오늘 할일
 
 타임라인 기반의 싱글 페이지 할 일 관리 웹앱입니다. `index.html` 파일 하나로 동작하며, 데이터는 브라우저의 `localStorage`에 저장되어 별도의 서버나 설치 과정이 필요하지 않습니다.
