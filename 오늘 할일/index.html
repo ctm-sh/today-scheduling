@@ -526,6 +526,22 @@
     .pomo-btn-primary { background: var(--accent); color: white; }
     .pomo-btn-secondary { background: var(--bg-secondary); color: var(--text-secondary); }
     .pomo-btn-danger { background: var(--danger); color: white; }
+    .pomo-settings {
+      display: flex; align-items: center; gap: 8px; justify-content: center;
+      margin-top: 10px; padding: 10px 12px;
+      background: var(--bg-secondary); border-radius: var(--radius);
+      font-size: 0.85rem;
+    }
+    .pomo-settings label { color: var(--text-secondary); font-weight: 600; }
+    .pomo-settings input {
+      width: 60px; padding: 6px 8px;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg-card); color: var(--text);
+      font-family: inherit; font-size: 0.85rem; text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .pomo-settings input:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pomo-settings span { color: var(--text-secondary); }
 
     /* Export modal */
     .export-btns { display: flex; flex-direction: column; gap: 8px; }
@@ -747,6 +763,9 @@
         <div class="pm-dot"></div>
         <span id="pomoMiniTime">25:00</span>
       </div>
+      <button class="hdr-btn" onclick="openPomoStandalone()" title="뽀모도로 타이머">
+        <svg viewBox="0 0 24 24"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+      </button>
       <button class="hdr-btn" onclick="openDashboard()" title="주간/월간 대시보드">
         <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
       </button>
@@ -878,6 +897,11 @@
       <div class="pomo-phase" id="pomoPhase">집중 시간</div>
       <div class="pomo-task-name" id="pomoTaskName"></div>
     </div>
+    <div class="pomo-settings">
+      <label for="pomoFocusInput">집중 시간</label>
+      <input type="number" id="pomoFocusInput" min="1" max="120" value="25" onchange="setPomoFocus()">
+      <span>분</span>
+    </div>
     <div class="pomo-btns">
       <button class="pomo-btn pomo-btn-primary" id="pomoBtnStart" onclick="pomoToggle()">시작</button>
       <button class="pomo-btn pomo-btn-secondary" onclick="pomoReset()">리셋</button>
@@ -965,7 +989,8 @@ let mobileTab = 'timeline';
 // Pomodoro state
 let pomoTaskId = null;
 let pomoRunning = false;
-let pomoSeconds = 25 * 60;
+let pomoFocusMinutes = parseInt(localStorage.getItem('td_pomo_focus'), 10) || 25;
+let pomoSeconds = pomoFocusMinutes * 60;
 let pomoPhase = 'focus'; // 'focus' or 'break'
 let pomoInterval = null;
 
@@ -1574,12 +1599,36 @@ function fireConfetti() {
 }
 
 // ── POMODORO ──
+function openPomoStandalone() {
+  if (!pomoRunning) {
+    pomoTaskId = null;
+    pomoPhase = 'focus';
+    pomoSeconds = pomoFocusMinutes * 60;
+    document.getElementById('pomoBtnStart').textContent = '시작';
+  }
+  openPomoModal();
+}
+
+function setPomoFocus() {
+  const input = document.getElementById('pomoFocusInput');
+  let m = parseInt(input.value, 10);
+  if (isNaN(m) || m < 1) m = 1;
+  if (m > 120) m = 120;
+  input.value = m;
+  pomoFocusMinutes = m;
+  localStorage.setItem('td_pomo_focus', String(m));
+  if (!pomoRunning && pomoPhase === 'focus') {
+    pomoSeconds = m * 60;
+    updatePomoDisplay();
+  }
+}
+
 function startPomo(taskId) {
   const task = load().find(t => t.id === taskId);
   if (!task) return;
   pomoTaskId = taskId;
   pomoPhase = 'focus';
-  pomoSeconds = 25 * 60;
+  pomoSeconds = pomoFocusMinutes * 60;
   pomoRunning = false;
   updatePomoDisplay();
   document.getElementById('pomoTaskName').textContent = task.title;
@@ -1587,6 +1636,11 @@ function startPomo(taskId) {
 }
 
 function openPomoModal() {
+  const input = document.getElementById('pomoFocusInput');
+  if (input) {
+    input.value = pomoFocusMinutes;
+    input.disabled = pomoRunning;
+  }
   document.getElementById('pomoOverlay').classList.add('open');
   updatePomoDisplay();
 }
@@ -1595,18 +1649,22 @@ function closePomoModal() {
 }
 
 function pomoToggle() {
+  const input = document.getElementById('pomoFocusInput');
   if (pomoRunning) {
     clearInterval(pomoInterval);
     pomoRunning = false;
     document.getElementById('pomoBtnStart').textContent = '재개';
+    if (input) input.disabled = false;
   } else {
     pomoRunning = true;
     document.getElementById('pomoBtnStart').textContent = '일시정지';
+    if (input) input.disabled = true;
     pomoInterval = setInterval(() => {
       pomoSeconds--;
       if (pomoSeconds <= 0) {
         clearInterval(pomoInterval);
         pomoRunning = false;
+        if (input) input.disabled = false;
         if (pomoPhase === 'focus') {
           sendNotification('집중 시간 완료!', '5분 휴식을 시작하세요.');
           pomoPhase = 'break';
@@ -1614,7 +1672,7 @@ function pomoToggle() {
         } else {
           sendNotification('휴식 완료!', '다시 집중할 준비가 되었어요.');
           pomoPhase = 'focus';
-          pomoSeconds = 25 * 60;
+          pomoSeconds = pomoFocusMinutes * 60;
         }
         document.getElementById('pomoBtnStart').textContent = '시작';
       }
@@ -1627,8 +1685,10 @@ function pomoToggle() {
 function pomoReset() {
   clearInterval(pomoInterval);
   pomoRunning = false;
-  pomoSeconds = pomoPhase === 'focus' ? 25 * 60 : 5 * 60;
+  pomoSeconds = pomoPhase === 'focus' ? pomoFocusMinutes * 60 : 5 * 60;
   document.getElementById('pomoBtnStart').textContent = '시작';
+  const input = document.getElementById('pomoFocusInput');
+  if (input) input.disabled = false;
   updatePomoDisplay();
   updatePomoMini();
 }
@@ -1638,8 +1698,10 @@ function pomoStop() {
   pomoRunning = false;
   pomoTaskId = null;
   pomoPhase = 'focus';
-  pomoSeconds = 25 * 60;
+  pomoSeconds = pomoFocusMinutes * 60;
   document.getElementById('pomoBtnStart').textContent = '시작';
+  const input = document.getElementById('pomoFocusInput');
+  if (input) input.disabled = false;
   updatePomoDisplay();
   updatePomoMini();
   closePomoModal();
@@ -1656,6 +1718,8 @@ function updatePomoDisplay() {
   if (pomoTaskId) {
     const task = load().find(t => t.id === pomoTaskId);
     document.getElementById('pomoTaskName').textContent = task ? task.title : '';
+  } else {
+    document.getElementById('pomoTaskName').textContent = '';
   }
 }
 
